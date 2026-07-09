@@ -3,13 +3,13 @@
 MAKEFLAGS		+= -j
 
 NAME			:= ircserv
-HEADERS			:=
+HEADERS			:= $(wildcard include/*.hpp)
 
 CXX				:= c++
 CXXFLAGS		:= -Wall -Wextra -Werror -std=c++17
-HFLAGS			:= -I./inc
+HFLAGS			:= -I./include
 
-SRC				:= main.cpp
+SRC				:= main.cpp Client.cpp Server.cpp
 OBJ				:= $(addprefix obj/, $(notdir $(SRC:%.cpp=%.o)))
 
 VPATH			:= src
