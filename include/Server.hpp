@@ -37,7 +37,7 @@ private:
 
     std::vector<struct pollfd>      _pollFds;
     std::map<int, Client>           _clients;
-    std::map<std::string, Channel>  _channels;
+    // std::map<std::string, Channel>  _channels;  // TODO: enable once Channel is implemented
 
 
     void    acceptNewClient();
