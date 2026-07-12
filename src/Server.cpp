@@ -6,10 +6,22 @@
 #include <stdexcept>  // std::runtime_error
 #include <iostream>   // std::cout
 
+
+void    Server::buildDispatch()
+{
+   dispatchCommand = {
+        {"PASS", {&Server::handlePass, false, 1}},
+        {"NICK", {&Server::handleNick, false, 1}},
+        {"USER", {&Server::handleUser, false, 4}},
+        {"PRIVMSG", {&Server::handlePrivMsg, true, 2}},
+        {"PING", {&Server::handlePing, false, 1}}
+   };
+}
+
 Server::Server(int port, const std::string& password)
     : _listenFd(-1), _port(port), _password(password)
 {
-
+    buildDispatch();
 }
 
 Server::~Server()
@@ -81,7 +93,6 @@ void    Server::init()
     std::cout << "Server is listening" << std::endl;
 }
 
-
 void    Server::acceptNewClient()
 {
     struct sockaddr_in  clientAddr;
@@ -94,6 +105,7 @@ void    Server::acceptNewClient()
 
     std::string ip = inet_ntoa(clientAddr.sin_addr);
     int         clientPort = ntohs(clientAddr.sin_port);
+
     _clients.try_emplace(clientFd, clientFd, ip);
 
     std::cout << "[+] New client connected"
@@ -110,21 +122,295 @@ void    Server::acceptNewClient()
     _pollFds.push_back(pfd);
 }
 
+void    Server::disconnectClient(int fd)
+{
+    Client* c = getClient(fd);
+    if (c && !c->getNick().empty()) {
+        _nickToFd.erase(c->getNick());
+    }
+
+    close(fd);
+    _clients.erase(fd);
+    // Mark the pollfd for removal
+    for (size_t i = 0; i < _pollFds.size(); ++i)
+        if (_pollFds[i].fd == fd) { _pollFds[i].fd = -1; break; } 
+}
+
+Client* Server::getClient(int fd)
+{
+    std::map<int, Client>::iterator it = _clients.find(fd);
+    if (it == _clients.end())
+        return nullptr;
+    return &it->second;
+}
+
+void    Server::tryRegister(int fd)
+{
+    Client *c = getClient(fd);
+    if (!c || c->isRegistered() || !c->gotPass() || !c->gotNick() || !c->gotUser())
+    {
+        std::stringstream ss;
+        ss << ":ircserv NOTICE * :Registration status: PASS(" << (c->gotPass() ? c->getPass() : "NO")
+           << ") NICK(" << (c->gotNick() ? c->getNick() : "NO")
+           << ") USER(" << (c->gotUser() ? c->getUser() : "NO") << ")\r\n";
+
+        sendToClient(fd, ss.str());
+        return;
+    }
+
+    if (c->getPass() != _password)
+    {
+        sendToClient(fd, ":ircserv 464 * :Password incorrect\r\n");
+        disconnectClient(fd);
+        return;
+    }
+
+    c->setRegistered(true);
+    // RPL_WELCOME
+    sendToClient(fd, ":ircserv 001 " + c->getNick() + " :Welcome to the Internet Relay Network " + c->getNick() + "\r\n");
+    // You would typically send more welcome messages here (002, 003, 004, etc.)
+}
+
+void    Server::handlePass(int fd, const Message& msg)
+{
+    Client *c = getClient(fd);
+    if (!c) return;
+
+    if (c->isRegistered())
+        return sendToClient(fd, ":ircserv 462 * :You may not reregister\r\n");
+
+    if (msg.params.empty())
+        return sendToClient(fd, ":ircserv 461 * PASS :Not enough parameters\r\n");
+    
+    c->setPass(msg.params[0]);
+    sendToClient(fd, ":ircserv NOTICE * :PASS command received\r\n");
+    tryRegister(fd);
+}
+
+void    Server::handleUser(int fd, const Message& msg)
+{
+    Client* c = getClient(fd);
+    if (!c) return;
+
+    if (c->isRegistered())
+        return sendToClient(fd, ":ircserv 462 * :You may not reregister\r\n");
+
+    // We already check for minParams in handleCommand, so this is safe.
+    // Parameters are: <username> <hostname> <servername> <realname>
+    // We only care about the username and realname for now.
+    std::string user = msg.params[0];
+    std::string realname = msg.trailing;
+
+    // The realname can be the trailing parameter or the 4th parameter if no trailing is present.
+    if (msg.trailing.empty() && msg.params.size() >= 4)
+        c->setUser(user, msg.params[3]);
+    else
+        c->setUser(user, realname);
+
+    tryRegister(fd);
+}
+
+void    Server::handleNick(int fd, const Message& msg)
+{
+    if (msg.params.empty()) {
+        sendToClient(fd, ":ircserv 431 * :No nickname given\r\n");
+        return;
+    }
+    std::string nick = msg.params[0];
+
+    // Check if nick is already in use
+    if (_nickToFd.count(nick)) {
+        sendToClient(fd, ":ircserv 433 * " + nick + " :Nickname is already in use\r\n");
+        return;
+    }
+
+    Client* c = getClient(fd);
+    if (!c) return;
+
+    if (c->isRegistered() && !c->getNick().empty()) {
+        // If already registered, update the nick mapping
+        _nickToFd.erase(c->getNick());
+        c->setNick(nick);
+        _nickToFd[nick] = fd;
+        // TODO: Send NICK change notification to other clients
+    } else {
+        c->setNick(nick);
+        _nickToFd[nick] = fd;
+    }
+    tryRegister(fd);
+}
+
+Message Server::parseMessage(const std::string& line) {
+    Message msg;
+    std::string remaining = line;
+
+    // 1. Remove leading spaces
+    remaining.erase(0, remaining.find_first_not_of(" "));
+    if (remaining.empty()) return msg;
+
+    // 2. Ignore prefix (starts with ':') for client messages
+    if (remaining[0] == ':') {
+        size_t spacePos = remaining.find(' ');
+        if (spacePos == std::string::npos) return msg;
+        remaining.erase(0, spacePos + 1);
+        remaining.erase(0, remaining.find_first_not_of(" "));
+    }
+
+    // 3. Extract Command
+    size_t spacePos = remaining.find(' ');
+    if (spacePos != std::string::npos) {
+        msg.cmd = remaining.substr(0, spacePos);
+        remaining.erase(0, spacePos + 1);
+    } else {
+        msg.cmd = remaining;
+        remaining.clear();
+    }
+
+    // Capitalize command
+    for (char& ch : msg.cmd) {
+        ch = std::toupper(static_cast<unsigned char>(ch));
+    }
+
+    // 4. Extract Parameters
+    while (!remaining.empty()) {
+        remaining.erase(0, remaining.find_first_not_of(" "));
+        if (remaining.empty()) break;
+
+        // If we hit a ':', the rest of the string is the trailing parameter
+        if (remaining[0] == ':') {
+            msg.trailing = remaining.substr(1);
+            break;
+        }
+
+        spacePos = remaining.find(' ');
+        if (spacePos != std::string::npos) {
+            msg.params.push_back(remaining.substr(0, spacePos));
+            remaining.erase(0, spacePos + 1);
+        } else {
+            msg.params.push_back(remaining);
+            remaining.clear();
+        }
+    }
+
+    return msg;
+}
+
+void    Server::handlePrivMsg(int fd, const Message& msg)
+{
+    std::string targetNick = msg.params[0];
+    std::string text = msg.trailing;
+
+    Client* sender = getClient(fd);
+    if (!sender) return;
+
+    // Find the target client's fd
+    auto it = _nickToFd.find(targetNick);
+    if (it == _nickToFd.end()) {
+        sendToClient(fd, ":ircserv 401 " + sender->getNick() + " " + targetNick + " :No such nick/channel\r\n");
+        return;
+    }
+    int targetFd = it->second;
+
+    // Format the message correctly: :<sender_nick>!<sender_user>@<sender_host> PRIVMSG <target_nick> :<text>
+    std::stringstream ss;
+    ss << ":" << sender->getNick() << " PRIVMSG " << targetNick << " :" << text << "\r\n";
+
+    sendToClient(targetFd, ss.str());
+}
+
+void    Server::handlePing(int fd, const Message& msg)
+{
+    Client* c = getClient(fd);
+    if (!c) return;
+    sendToClient(fd, ":ircserv PONG ircserv :" + msg.params[0] + "\r\n");
+}
+
+void    Server::handleCommand(int fd, const std::string& line)
+{
+    Client* cp = getClient(fd);
+    if (!cp) return;
+    Client& c = *cp;
+
+    Message msg = parseMessage(line);
+    if (msg.cmd.empty()) return;
+
+    if (auto it = dispatchCommand.find(msg.cmd); it != dispatchCommand.end()) {
+        const Command& cmdDef = it->second;
+
+        if (cmdDef.needsRegistration && !c.isRegistered())
+            return sendToClient(fd, ":ircserv 451 * :You have not registered\r\n");
+        
+        // The trailing part is also a parameter
+        if (msg.params.size() < cmdDef.minParams)
+            return sendToClient(fd, ":ircserv 461 " + c.getNick() + " " + msg.cmd + " :Not enough parameters\r\n");
+
+        std::invoke(cmdDef.fn, this, fd, msg);
+    } else {
+        sendToClient(fd, ":ircserv 421 * " + msg.cmd + " :Unknown command\r\n");
+    }
+
+}
+
 void    Server::readFromClient(int fd)
 {
-    (void)fd;
+    char    tmp[512];
+    ssize_t n = recv(fd, tmp, sizeof(tmp), 0);
+
+    if (n == 0)
+        return disconnectClient(fd);
+    if (n < 0)
+        return ;
+
+    Client* cp = getClient(fd);
+    if (!cp)
+        return;
+    Client& c = *cp;
+    c.recvBuf().append(tmp, n);
+
+    size_t pos;
+    while ((pos = c.recvBuf().find('\n')) != std::string::npos)
+    {
+        std::string line = c.recvBuf().substr(0, pos);
+        c.recvBuf().erase(0, pos + 1);
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (!line.empty())
+            handleCommand(fd, line);
+    }
+}
+
+void    Server::sendToClient(int fd, const std::string& msg)
+{
+    Client* c = getClient(fd);
+    if (!c)
+        return;
+    c->outBuf() += msg;
+    for (size_t i = 0; i < _pollFds.size(); ++i)
+        if (_pollFds[i].fd == fd) { _pollFds[i].events |= POLLOUT; break; }
 }
 
 void    Server::flushToClient(int fd)
 {
-    (void)fd;
+    Client* cp = getClient(fd);
+    if (!cp)
+        return;
+    Client& c = *cp;
+    if (c.outBuf().empty())
+        return;
+
+    ssize_t n = send(fd, c.outBuf().data(), c.outBuf().size(), 0);
+    if (n <= 0)
+        return ;
+    c.outBuf().erase(0, n);
+    if (c.outBuf().empty())
+        for (size_t i = 0; i < _pollFds.size(); ++i)
+            if (_pollFds[i].fd == fd)  { _pollFds[i].events &= ~POLLOUT; break; }
 }
 
 void    Server::run() {
     while (!_signalReceived) {
-        // _listenFd
         int ready = poll(&_pollFds[0], _pollFds.size(), -1);
-        // new client wants to connect
+
         if (ready < 0)
         {
             if (errno == EINTR)
@@ -133,14 +419,23 @@ void    Server::run() {
         }
 
         for (size_t i = 0; i < _pollFds.size(); ++i) {
+
             if (_pollFds[i].revents & POLLIN) {
                 if (_pollFds[i].fd == _listenFd)
                     acceptNewClient();
                 else
+                {
                     readFromClient(_pollFds[i].fd);
+                    // std::cout << "read from client" << std::endl;
+                }
             }
             if (_pollFds[i].revents & POLLOUT)
+            {
                 flushToClient(_pollFds[i].fd);
+                // std::cout << "flush to client" << std::endl;
+            }
         }
+        _pollFds.erase(std::remove_if(_pollFds.begin(), _pollFds.end(),
+            [](const pollfd& p){ return p.fd == -1; }), _pollFds.end());
     }
 }

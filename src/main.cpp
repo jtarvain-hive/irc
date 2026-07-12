@@ -7,6 +7,8 @@
 
 #define MAXLEN 32
 
+#include "Client.hpp"
+
 int parsePort(const std::string& str)
 {
 	size_t pos;
@@ -55,6 +57,5 @@ int	main(int argc, char *argv[]) {
 		std::cerr << "Error: " << e.what() << '\n';
 		return (1);
 	}
-	
 	return (0);
 }

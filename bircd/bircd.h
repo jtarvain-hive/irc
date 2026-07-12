@@ -43,7 +43,7 @@ void	srv_accept(t_env *e, int s);
 void	client_read(t_env *e, int cs);
 void	client_write(t_env *e, int cs);
 void	clean_fd(t_fd *fd);
-int	x_int(int err, int res, char *str, char *file, int line);
+int	  x_int(int err, int res, char *str, char *file, int line);
 void	*x_void(void *err, void *res, char *str, char *file, int line);
 void	init_fd(t_env *e);
 void	do_select(t_env *e);
