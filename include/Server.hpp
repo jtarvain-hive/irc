@@ -90,6 +90,7 @@ private:
     void    handleUser(int fd, const Message& msg);
     void    handlePrivMsg(int fd, const Message& msg);
     void    handlePing(int fd, const Message& msg);
+    void    handleCap(int fd, const Message& msg);
     void    tryRegister(int fd);
     
 };

@@ -12,9 +12,10 @@ void    Server::buildDispatch()
    dispatchCommand = {
         {"PASS", {&Server::handlePass, false, 1}},
         {"NICK", {&Server::handleNick, false, 1}},
-        {"USER", {&Server::handleUser, false, 4}},
+        {"USER", {&Server::handleUser, false, 3}},
         {"PRIVMSG", {&Server::handlePrivMsg, true, 2}},
-        {"PING", {&Server::handlePing, false, 1}}
+        {"PING", {&Server::handlePing, false, 1}},
+        {"CAP", {&Server::handleCap, false, 1}}
    };
 }
 
@@ -161,6 +162,7 @@ void    Server::tryRegister(int fd)
     if (c->getPass() != _password)
     {
         sendToClient(fd, ":ircserv 464 * :Password incorrect\r\n");
+        flushToClient(fd);
         disconnectClient(fd);
         return;
     }
@@ -323,6 +325,21 @@ void    Server::handlePing(int fd, const Message& msg)
     Client* c = getClient(fd);
     if (!c) return;
     sendToClient(fd, ":ircserv PONG ircserv :" + msg.params[0] + "\r\n");
+}
+
+void    Server::handleCap(int fd, const Message& msg)
+{
+    std::string sub = msg.params[0];
+    for (char& ch : sub)
+        ch = std::toupper(static_cast<unsigned char>(ch));
+
+    if (sub == "LS")
+        sendToClient(fd, ":ircserv CAP * LS :\r\n");
+    else if (sub == "LIST")
+        sendToClient(fd, ":ircserv CAP * LIST :\r\n");
+    else if (sub == "REQ")
+        sendToClient(fd, ":ircserv CAP * NAK :" + msg.trailing + "\r\n");
+    // CAP END and anything else: no reply needed, client just proceeds.
 }
 
 void    Server::handleCommand(int fd, const std::string& line)
