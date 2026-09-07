@@ -1,29 +1,22 @@
-
-
 MAKEFLAGS		+= -j
 
 NAME			:= ircserv
-HEADERS			:= $(wildcard include/*.hpp)
+HEADERS			:= $(wildcard include/*.hpp) $(wildcard src/Commands/*.hpp)
 
 CXX				:= c++
-CXXFLAGS		:= -Wall -Wextra -Werror -std=c++17
+CXXFLAGS		:= -Wall -Wextra -Werror -std=c++20
 HFLAGS			:= -I./include
 
-SRC				:= main.cpp Client.cpp Server.cpp
-OBJ				:= $(addprefix obj/, $(notdir $(SRC:%.cpp=%.o)))
-
-VPATH			:= src
+SRC				:= $(shell find src -type f -name '*.cpp' | sort)
+OBJ				:= $(patsubst src/%.cpp,obj/%.o,$(SRC))
 
 all: $(NAME)
 
 $(NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(HFLAGS) $(OBJ) -o $(NAME)
 
-.NOTPARALLEL: obj
-obj:
-	mkdir -p obj
-
-obj/%.o: %.cpp $(HEADERS) | obj
+obj/%.o: src/%.cpp $(HEADERS)
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(HFLAGS) -c $< -o $@
 
 clean:
@@ -36,4 +29,4 @@ fclean: clean
 re: fclean all
 
 .PHONY: all clean fclean re
-.SECONDARY: $(OBJ) obj
+.SECONDARY: $(OBJ)
