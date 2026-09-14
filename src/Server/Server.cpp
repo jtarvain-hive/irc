@@ -121,20 +121,23 @@ void Server::readFromClient(int fd)
     if (n < 0)
         return;
 
-    Client* cp = getClient(fd);
-    if (!cp) return;
-    Client& c = *cp;
-    c.recvBuf().append(tmp, n);
+    Client* c = getClient(fd);
+    if (!c) return;
+    c->recvBuf().append(tmp, n);
 
     size_t pos;
-    while ((pos = c.recvBuf().find('\n')) != std::string::npos)
+    while ((pos = c->recvBuf().find('\n')) != std::string::npos)
     {
-        std::string line = c.recvBuf().substr(0, pos);
-        c.recvBuf().erase(0, pos + 1);
+        std::string line = c->recvBuf().substr(0, pos);
+        c->recvBuf().erase(0, pos + 1);
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
         if (!line.empty())
+        {
             handleCommand(fd, line);
+            c = getClient(fd);   // handleCommand may have disconnected this client
+            if (!c) return;      // client is gone; don't touch freed memory
+        }
     }
 }
 
