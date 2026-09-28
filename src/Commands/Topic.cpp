@@ -14,7 +14,7 @@ void cmdTopic(Server& server, int fd, const Message& msg)
 
     // No trailing -> query the topic
     Channel* ch = server.getChannel(channel);
-    if (msg.trailing.empty()) {
+    if (!msg.hasTrailing) {
         if (!ch || ch->getTopic().empty())
             return server.sendToClient(fd, ":ircserv 331 " + c->getNick() + " " + channel + " :No topic is set\r\n");
         return server.sendToClient(fd, ":ircserv 332 " + c->getNick() + " " + channel + " :" + ch->getTopic() + "\r\n");

@@ -31,6 +31,28 @@ struct Message {
     std::string                 cmd;
     std::vector<std::string>    params;
     std::string                 trailing;
+    bool                        hasTrailing = false;
+};
+
+// 'A'-'Z' and '[' '\' ']' are contiguous, so +32 maps each to its IRC
+// lowercase form: letters to 'a'-'z', brackets to '{' '|' '}'
+inline char ircLower(char ch)
+{
+    return (ch >= 'A' && ch <= ']') ? static_cast<char>(ch + 32) : ch;
+}
+
+struct IrcLess {
+    bool operator()(const std::string& a, const std::string& b) const
+    {
+        size_t n = std::min(a.size(), b.size());
+        for (size_t i = 0; i < n; ++i) {
+            char ca = ircLower(a[i]);
+            char cb = ircLower(b[i]);
+            if (ca != cb)
+                return ca < cb;
+        }
+        return a.size() < b.size();
+    }
 };
 
 class Server {
@@ -83,7 +105,7 @@ public:
 
     void    sendToClient(int fd, const std::string& line);
     void    flushToClient(int fd);
-    void    disconnectClient(int fd);
+    void    disconnectClient(int fd, const std::string& reason = "Connection closed");
     void    tryRegister(int fd);
     void    broadcastToMemberChannels(int fd, const std::string& line);
     void    removeClientFromChannels(int fd);
@@ -96,8 +118,8 @@ private:
     std::vector<struct pollfd>      _pollFds;
     std::map<int, Client>           _clients;
 
-    std::unordered_map<std::string, int> _nickToFd;
-    std::map<std::string, Channel>       _channels;  // case-insensitive comparator (TBD by partner)
+    std::map<std::string, int, IrcLess>     _nickToFd;
+    std::map<std::string, Channel, IrcLess> _channels;
 
     std::unordered_map<std::string_view, Command> dispatchCommand;
 

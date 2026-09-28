@@ -4,21 +4,27 @@
 
 
 
-void cmdJoin(Server& server, int fd, const Message& msg)
+namespace {
+
+std::vector<std::string> splitList(const std::string& s, char sep)
+{
+    std::vector<std::string> out;
+    std::string cur;
+    for (char ch : s) {
+        if (ch == sep) { out.push_back(cur); cur.clear(); }
+        else cur += ch;
+    }
+    out.push_back(cur);
+    return out;
+}
+
+void joinOne(Server& server, int fd, const std::string& name, const std::string& key)
 {
     Client* c = server.getClient(fd);
     if (!c) return;
 
-    if (msg.params.empty())
-        return server.sendToClient(fd, ":ircserv 461 " + c->getNick() + " JOIN :Not enough parameters\r\n");
-
-    // Spec allows comma-separated channel list: "JOIN #a,#b key1,"
-    // For now we support a single channel.
-    const std::string& name = msg.params[0];
     if (name.empty() || (name[0] != '#' && name[0] != '&'))
         return server.sendToClient(fd, ":ircserv 403 " + c->getNick() + " " + name + " :No such channel\r\n");
-
-    const std::string key = (msg.params.size() >= 2) ? msg.params[1] : std::string();
 
     Channel* ch = server.getChannel(name);
     if (ch && ch->isInviteOnly() && !ch->isInvited(fd))
@@ -37,6 +43,10 @@ void cmdJoin(Server& server, int fd, const Message& msg)
     if (!ch)
         return;
 
+    // replies use the channel's stored spelling, not the case the client
+    // typed, so every member sees the same channel name
+    const std::string& cname = ch->getName();
+
     // First member becomes operator
     if (ch->getMembers().size() == 1)
         ch->addOperator(fd);
@@ -44,14 +54,14 @@ void cmdJoin(Server& server, int fd, const Message& msg)
     std::stringstream ss;
     ss << ":" << c->getNick() << "!~" << c->getUser()
        << "@" << c->getIpAddr()
-       << " JOIN " << name << "\r\n";
-    server.sendToChannel(name, ss.str());
+       << " JOIN " << cname << "\r\n";
+    server.sendToChannel(cname, ss.str());
 
     // Topic
     if (ch->getTopic().empty())
-        server.sendToClient(fd, ":ircserv 331 " + c->getNick() + " " + name + " :No topic is set\r\n");
+        server.sendToClient(fd, ":ircserv 331 " + c->getNick() + " " + cname + " :No topic is set\r\n");
     else
-        server.sendToClient(fd, ":ircserv 332 " + c->getNick() + " " + name + " :" + ch->getTopic() + "\r\n");
+        server.sendToClient(fd, ":ircserv 332 " + c->getNick() + " " + cname + " :" + ch->getTopic() + "\r\n");
 
     // NAMES reply
     std::string names;
@@ -61,8 +71,29 @@ void cmdJoin(Server& server, int fd, const Message& msg)
         if (!names.empty()) names += " ";
         if (ch->isOperator(*it)) names += "@" + m->getNick(); else names += m->getNick();
     }
-    server.sendToClient(fd, ":ircserv 353 " + c->getNick() + " = " + name + " :" + names + "\r\n");
-    server.sendToClient(fd, ":ircserv 366 " + c->getNick() + " " + name + " :End of NAMES list\r\n");
+    server.sendToClient(fd, ":ircserv 353 " + c->getNick() + " = " + cname + " :" + names + "\r\n");
+    server.sendToClient(fd, ":ircserv 366 " + c->getNick() + " " + cname + " :End of NAMES list\r\n");
+}
+
+}   // namespace
+
+void cmdJoin(Server& server, int fd, const Message& msg)
+{
+    Client* c = server.getClient(fd);
+    if (!c) return;
+
+    if (msg.params.empty())
+        return server.sendToClient(fd, ":ircserv 461 " + c->getNick() + " JOIN :Not enough parameters\r\n");
+
+    std::vector<std::string> names = splitList(msg.params[0], ',');
+    std::vector<std::string> keys  = (msg.params.size() >= 2)
+                                   ? splitList(msg.params[1], ',')
+                                   : std::vector<std::string>();
+
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (names[i].empty()) continue;
+        joinOne(server, fd, names[i], (i < keys.size()) ? keys[i] : std::string());
+    }
 }
 
  

@@ -32,6 +32,7 @@ void Server::init()
 {
     signal(SIGINT,  Server::signalHandler);
     signal(SIGQUIT, Server::signalHandler);
+    signal(SIGPIPE, SIG_IGN);
 
     this->_listenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (this->_listenFd < 0)
@@ -94,16 +95,20 @@ void Server::acceptNewClient()
     _pollFds.push_back(pfd);
 }
 
-void Server::disconnectClient(int fd)
+void Server::disconnectClient(int fd, const std::string& reason)
 {
     Client* c = getClient(fd);
-    if (c && !c->getNick().empty())
-        _nickToFd.erase(c->getNick());
+    if (c) {
+        // broadcast before removeClientFromChannels: the fd must still be a
+        // member for broadcastToMemberChannels to find its channels
+        std::string who = c->getNick().empty() ? std::string("*") : c->getNick();
+        broadcastToMemberChannels(fd, ":" + who + "!~" + c->getUser() + "@"
+                                      + c->getIpAddr() + " QUIT :" + reason + "\r\n");
+        if (!c->getNick().empty())
+            _nickToFd.erase(c->getNick());
+    }
 
     removeClientFromChannels(fd);
-
-    // TODO: remove the client from every channel they belong to
-    //       and broadcast QUIT to those channels.
 
     close(fd);
     _clients.erase(fd);
@@ -118,8 +123,11 @@ void Server::readFromClient(int fd)
 
     if (n == 0)
         return disconnectClient(fd);
-    if (n < 0)
-        return;
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        return disconnectClient(fd);
+    }
 
     Client* c = getClient(fd);
     if (!c) return;
@@ -134,6 +142,7 @@ void Server::readFromClient(int fd)
             line.pop_back();
         if (!line.empty())
         {
+            // std::cerr << "<< " << line << "\n";   // DEBUG: raw client input
             handleCommand(fd, line);
             c = getClient(fd);   // handleCommand may have disconnected this client
             if (!c) return;      // client is gone; don't touch freed memory

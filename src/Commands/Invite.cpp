@@ -24,6 +24,10 @@ void cmdInvite(Server& server, int fd, const Message& msg)
     if (!ch->isOperator(fd))
         return server.sendToClient(fd, ":ircserv 482 " + c->getNick() + " " + channel + " :You're not a channel operator\r\n");
 
+    if (ch->hasMember(targetFd))
+        return server.sendToClient(fd, ":ircserv 443 " + c->getNick() + " "
+            + target + " " + channel + " :is already on channel\r\n");
+
     server.addInvite(channel, target);
     server.sendToClient(fd, ":ircserv 341 " + c->getNick() + " " + target + " " + channel + "\r\n");
 
