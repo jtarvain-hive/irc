@@ -7,8 +7,6 @@
 
 #define MAXLEN 32
 
-#include "Client.hpp"
-
 int parsePort(const std::string& str)
 {
 	size_t pos;
@@ -25,10 +23,10 @@ std::string	validatePassword(const std::string& pass)
 {
 	if (pass.empty())
 		throw std::invalid_argument("password is empty");
-	
+
 	if (pass.length() > MAXLEN)
 		throw std::invalid_argument("password is too long");
-	
+
 	if (!std::all_of(pass.begin(), pass.end(), [](unsigned char c){ return (std::isprint(c) && !std::isspace(c)); }))
 		throw std::invalid_argument("password must contain only valid characters");
 
@@ -42,7 +40,7 @@ int	main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	try 
+	try
 	{
 		int port = parsePort(argv[1]);
 		std::string pass = validatePassword(argv[2]);

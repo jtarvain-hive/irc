@@ -2,7 +2,6 @@
 #include "Server.hpp"
 #include "Client.hpp"
 
-#include <sstream>
 #include <cstdlib>
 
 namespace {
@@ -13,7 +12,6 @@ bool applyMode(Server& server, int fd,
                const std::string& arg, std::string& outReply)
 {
     Client* c = server.getClient(fd);
-    (void)c;
 
     switch (mode) {
     case 'i':
