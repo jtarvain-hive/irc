@@ -8,6 +8,8 @@ void cmdPass  (Server&, int, const Message&);
 void cmdNick  (Server&, int, const Message&);
 void cmdUser  (Server&, int, const Message&);
 void cmdPrivmsg(Server&, int, const Message&);
+void cmdNotice(Server&, int, const Message&);
+void cmdWho   (Server&, int, const Message&);
 void cmdPing  (Server&, int, const Message&);
 void cmdCap   (Server&, int, const Message&);
 void cmdQuit  (Server&, int, const Message&);
@@ -25,6 +27,8 @@ void Server::buildDispatch()
         {"NICK",   { cmdNick,   false, 1 }},
         {"USER",   { cmdUser,   false, 3 }},
         {"PRIVMSG",{ cmdPrivmsg,true,  2 }},
+        {"NOTICE", { cmdNotice, true,  0 }},
+        {"WHO",    { cmdWho,    true,  0 }},
         {"PING",   { cmdPing,   false, 1 }},
         {"CAP",    { cmdCap,    false, 1 }},
         {"QUIT",   { cmdQuit,   false, 0 }},
@@ -69,6 +73,7 @@ Message Server::parseMessage(const std::string& line) {
 
         if (remaining[0] == ':') {
             msg.trailing = remaining.substr(1);
+            msg.hasTrailing = true;
             break;
         }
 
@@ -108,7 +113,7 @@ void Server::handleCommand(int fd, const std::string& line)
     }
 
     // trailing counts as a parameter when present
-    size_t provided = msg.params.size() + (msg.trailing.empty() ? 0 : 1);
+    size_t provided = msg.params.size() + (msg.hasTrailing ? 1 : 0);
     if (provided < def.minParams) {
         sendToClient(fd, ":ircserv 461 " + c.getNick() + " " + msg.cmd + " :Not enough parameters\r\n");
         return;
@@ -125,7 +130,7 @@ void Server::tryRegister(int fd)
     if (c->isRegistered())
         return;
 
-    if (!c->gotPass() || !c->gotNick() || !c->gotUser())
+    if (!c->gotNick() || !c->gotUser())
     {
         // Silent on intermediate steps; uncomment for debugging.
         // std::stringstream ss;
@@ -134,7 +139,7 @@ void Server::tryRegister(int fd)
         return;
     }
 
-    if (c->getPass() != _password)
+    if (!c->gotPass() || c->getPass() != _password)
     {
         sendToClient(fd, ":ircserv 464 " + c->getNick() + " :Password incorrect\r\n");
         flushToClient(fd);
@@ -143,6 +148,12 @@ void Server::tryRegister(int fd)
     }
 
     c->setRegistered(true);
-    sendToClient(fd, ":ircserv 001 " + c->getNick() + " :Welcome to the Internet Relay Network " + c->getNick() + "\r\n");
-    // 002..004 numerics would go here.
+
+    const std::string& n = c->getNick();
+    sendToClient(fd, ":ircserv 001 " + n + " :Welcome to the Internet Relay Network "
+                     + n + "!~" + c->getUser() + "@" + c->getIpAddr() + "\r\n");
+    sendToClient(fd, ":ircserv 002 " + n + " :Your host is ircserv, running version 1.0\r\n");
+    sendToClient(fd, ":ircserv 003 " + n + " :This server was created recently\r\n");
+    sendToClient(fd, ":ircserv 004 " + n + " ircserv 1.0 * itkol\r\n");
+    sendToClient(fd, ":ircserv 422 " + n + " :MOTD File is missing\r\n");
 }

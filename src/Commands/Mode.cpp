@@ -2,7 +2,6 @@
 #include "Server.hpp"
 #include "Client.hpp"
 
-#include <sstream>
 #include <cstdlib>
 
 namespace {
@@ -13,7 +12,6 @@ bool applyMode(Server& server, int fd,
                const std::string& arg, std::string& outReply)
 {
     Client* c = server.getClient(fd);
-    (void)c;
 
     switch (mode) {
     case 'i':
@@ -24,11 +22,19 @@ bool applyMode(Server& server, int fd,
         server.setChannelTopicRestricted(channel, sign == '+');
         outReply = ":" + (c ? c->getNick() : std::string("ircserv")) + " MODE " + channel + " " + sign + "t\r\n";
         return true;
-    case 'o':
+    case 'o': {
         // arg = target nick; toggle operator on that nick
+        int      tfd = server.findFdByNick(arg);
+        Channel* chp = server.getChannel(channel);
+        if (tfd < 0 || !chp || !chp->hasMember(tfd)) {
+            outReply = ":ircserv 441 " + (c ? c->getNick() : std::string("*"))
+                     + " " + arg + " " + channel + " :They aren't on that channel\r\n";
+            return false;
+        }
         server.setChannelOperator(channel, arg, sign == '+');
         outReply = ":" + (c ? c->getNick() : std::string("ircserv")) + " MODE " + channel + " " + sign + "o " + arg + "\r\n";
         return true;
+    }
     case 'k':
         // arg = new key (only meaningful on '+')
         if (sign == '+') server.setChannelKey(channel, arg);
@@ -37,8 +43,14 @@ bool applyMode(Server& server, int fd,
         return true;
     case 'l':
         if (sign == '+') {
-            int limit = std::atoi(arg.c_str());
-            server.setChannelUserLimit(channel, limit);
+            char* end   = nullptr;
+            long  limit = std::strtol(arg.c_str(), &end, 10);
+            if (arg.empty() || *end != '\0' || limit <= 0) {
+                outReply = ":ircserv 461 " + (c ? c->getNick() : std::string("*"))
+                         + " MODE :Not enough parameters\r\n";
+                return false;
+            }
+            server.setChannelUserLimit(channel, static_cast<size_t>(limit));
             outReply = ":" + (c ? c->getNick() : std::string("ircserv")) + " MODE " + channel + " +l " + arg + "\r\n";
         } else {
             server.clearChannelUserLimit(channel);
@@ -64,6 +76,16 @@ void cmdMode(Server& server, int fd, const Message& msg)
         return server.sendToClient(fd, ":ircserv 461 " + c->getNick() + " MODE :Not enough parameters\r\n");
 
     const std::string& channel = msg.params[0];
+
+    // irssi sends "MODE <yournick>" on connect; a non-channel target is a user
+    if (channel.empty() || (channel[0] != '#' && channel[0] != '&')) {
+        if (channel == c->getNick())
+            server.sendToClient(fd, ":ircserv 221 " + c->getNick() + " +\r\n");
+        else
+            server.sendToClient(fd, ":ircserv 502 " + c->getNick() + " :Cannot change mode for other users\r\n");
+        return;
+    }
+
     Channel* ch = server.getChannel(channel);
 
     if (!ch || !ch->hasMember(fd))
@@ -95,7 +117,8 @@ void cmdMode(Server& server, int fd, const Message& msg)
         if (ch == '+' || ch == '-') { sign = ch; continue; }
 
         std::string arg;
-        bool needsArg = (ch == 'o' || ch == 'k' || ch == 'l');
+        // -k / -l take no argument; only 'o' always needs one
+        bool needsArg = (ch == 'o') || ((ch == 'k' || ch == 'l') && sign == '+');
         if (needsArg) {
             if (argIdx >= msg.params.size()) {
                 server.sendToClient(fd, ":ircserv 461 " + c->getNick() + " MODE :Not enough parameters\r\n");

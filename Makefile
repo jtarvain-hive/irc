@@ -1,22 +1,35 @@
 MAKEFLAGS		+= -j
 
 NAME			:= ircserv
-HEADERS			:= $(wildcard include/*.hpp) $(wildcard src/Commands/*.hpp)
+HEADERS			:= include/Command.hpp include/Server.hpp include/Channel.hpp \
+				   include/Client.hpp
 
 CXX				:= c++
-CXXFLAGS		:= -Wall -Wextra -Werror -std=c++20
+CXXFLAGS		:= -Wall -Wextra -Werror -std=c++20 -g
 HFLAGS			:= -I./include
 
-SRC				:= $(shell find src -type f -name '*.cpp' | sort)
-OBJ				:= $(patsubst src/%.cpp,obj/%.o,$(SRC))
+SRC				:= main.cpp Client.cpp Channel.cpp \
+				   Server.cpp Dispatch.cpp Channels.cpp \
+				   Cap.cpp Invite.cpp Join.cpp Kick.cpp Mode.cpp Nick.cpp Part.cpp \
+				   Notice.cpp Pass.cpp Ping.cpp Privmsg.cpp Quit.cpp Topic.cpp User.cpp \
+				   Who.cpp
+OBJ				:= $(addprefix obj/, $(notdir $(SRC:%.cpp=%.o)))
+
+VPATH			:= src src/Server src/Commands
 
 all: $(NAME)
+
+val: $(NAME)
+	valgrind ./$(NAME) 6667 pw
 
 $(NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(HFLAGS) $(OBJ) -o $(NAME)
 
-obj/%.o: src/%.cpp $(HEADERS)
-	mkdir -p $(dir $@)
+.NOTPARALLEL: obj
+obj:
+	mkdir -p obj
+
+obj/%.o: %.cpp $(HEADERS) | obj
 	$(CXX) $(CXXFLAGS) $(HFLAGS) -c $< -o $@
 
 clean:
@@ -29,4 +42,4 @@ fclean: clean
 re: fclean all
 
 .PHONY: all clean fclean re
-.SECONDARY: $(OBJ)
+.SECONDARY: $(OBJ) obj

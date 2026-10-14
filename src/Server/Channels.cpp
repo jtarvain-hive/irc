@@ -13,7 +13,7 @@ Client* Server::getClient(int fd)
 
 int Server::findFdByNick(const std::string& nick) const
 {
-    std::unordered_map<std::string, int>::const_iterator it = _nickToFd.find(nick);
+    auto it = _nickToFd.find(nick);
     return (it == _nickToFd.end()) ? -1 : it->second;
 }
 
@@ -36,7 +36,7 @@ bool Server::sendToChannel(const std::string& channelName,
                            const std::string& line,
                            int exceptFd)
 {
-    std::map<std::string, Channel>::iterator it = _channels.find(channelName);
+    auto it = _channels.find(channelName);
     if (it == _channels.end()) return false;
     Channel& ch = it->second;
     const std::set<int>& members = ch.getMembers();
@@ -50,16 +50,16 @@ bool Server::sendToChannel(const std::string& channelName,
 
 Channel* Server::getOrCreateChannel(const std::string& name)
 {
-    std::map<std::string, Channel>::iterator it = _channels.find(name);
+    auto it = _channels.find(name);
     if (it != _channels.end())
         return &it->second;
-    std::pair<std::map<std::string, Channel>::iterator, bool> res = _channels.emplace(name, Channel(name));
+    auto res = _channels.emplace(name, Channel(name));
     return &res.first->second;
 }
 
 Channel* Server::getChannel(const std::string& name)
 {
-    std::map<std::string, Channel>::iterator it = _channels.find(name);
+    auto it = _channels.find(name);
     if (it == _channels.end()) return nullptr;
     return &it->second;
 }
@@ -73,7 +73,7 @@ bool Server::isMember(const std::string& channel, const std::string& nick) const
 {
     int fd = findFdByNick(nick);
     if (fd < 0) return false;
-    std::map<std::string, Channel>::const_iterator it = _channels.find(channel);
+    auto it = _channels.find(channel);
     if (it == _channels.end()) return false;
     return it->second.hasMember(fd);
 }
@@ -82,7 +82,7 @@ bool Server::isOperator(const std::string& channel, const std::string& nick) con
 {
     int fd = findFdByNick(nick);
     if (fd < 0) return false;
-    std::map<std::string, Channel>::const_iterator it = _channels.find(channel);
+    auto it = _channels.find(channel);
     if (it == _channels.end()) return false;
     return it->second.isOperator(fd);
 }
@@ -107,7 +107,7 @@ bool Server::removeMemberFromChannel(const std::string& channel, const std::stri
 {
     int fd = findFdByNick(nick);
     if (fd < 0) return false;
-    std::map<std::string, Channel>::iterator it = _channels.find(channel);
+    auto it = _channels.find(channel);
     if (it == _channels.end()) return false;
     Channel& ch = it->second;
     if (!ch.hasMember(fd)) return false;
@@ -197,7 +197,7 @@ void Server::replyChannelMode(int fd, const std::string& channel)
 void Server::broadcastToMemberChannels(int fd, const std::string& line)
 {
     std::set<int> delivered;
-    for (std::map<std::string, Channel>::iterator it = _channels.begin(); it != _channels.end(); ++it) {
+    for (auto it = _channels.begin(); it != _channels.end(); ++it) {
         Channel& ch = it->second;
         if (ch.hasMember(fd)) {
             const std::set<int>& members = ch.getMembers();
@@ -214,7 +214,7 @@ void Server::broadcastToMemberChannels(int fd, const std::string& line)
 
 void Server::removeClientFromChannels(int fd)
 {
-    for (std::map<std::string, Channel>::iterator it = _channels.begin(); it != _channels.end(); ) {
+    for (auto it = _channels.begin(); it != _channels.end(); ) {
         Channel& ch = it->second;
         if (ch.hasMember(fd))
             ch.removeMember(fd);
