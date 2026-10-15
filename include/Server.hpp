@@ -41,6 +41,17 @@ inline char ircLower(char ch)
     return (ch >= 'A' && ch <= ']') ? static_cast<char>(ch + 32) : ch;
 }
 
+// "a,b,,c" -> {"a", "b", "", "c"}; callers skip empty items
+inline std::vector<std::string> splitList(const std::string& s, char sep)
+{
+    std::vector<std::string> out;
+    std::istringstream iss(s);
+    std::string item;
+    while (std::getline(iss, item, sep))
+        out.push_back(item);
+    return out;
+}
+
 struct IrcLess {
     bool operator()(const std::string& a, const std::string& b) const
     {
@@ -106,6 +117,7 @@ public:
     void    sendToClient(int fd, const std::string& line);
     void    flushToClient(int fd);
     void    disconnectClient(int fd, const std::string& reason = "Connection closed");
+    void    closeAfterFlush(int fd, const std::string& reason);
     void    tryRegister(int fd);
     void    broadcastToMemberChannels(int fd, const std::string& line);
     void    removeClientFromChannels(int fd);
@@ -126,12 +138,10 @@ private:
     void    buildDispatch();
     void    acceptNewClient();
     void    readFromClient(int fd);
+    void    detachClient(int fd, const std::string& reason);
 
     void    handleCommand(int fd, const std::string& line);
     Message parseMessage(const std::string& line);
-
-    void    closeFds();
-    void    clearClients(int fd);
 
     static volatile sig_atomic_t _signalReceived;
     static void signalHandler(int signum);

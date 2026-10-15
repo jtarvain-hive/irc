@@ -93,7 +93,7 @@ Message Server::parseMessage(const std::string& line) {
 void Server::handleCommand(int fd, const std::string& line)
 {
     Client* cp = getClient(fd);
-    if (!cp) return;
+    if (!cp || cp->isClosing()) return;
     const Client& c = *cp;
 
     Message msg = parseMessage(line);
@@ -101,21 +101,21 @@ void Server::handleCommand(int fd, const std::string& line)
 
     auto it = dispatchCommand.find(msg.cmd);
     if (it == dispatchCommand.end()) {
-        sendToClient(fd, ":ircserv 421 " + c.getNick() + " " + msg.cmd + " :Unknown command\r\n");
+        sendToClient(fd, ":ircserv 421 " + c.replyNick() + " " + msg.cmd + " :Unknown command\r\n");
         return;
     }
 
     const Command& def = it->second;
 
     if (def.needsRegistration && !c.isRegistered()) {
-        sendToClient(fd, ":ircserv 451 " + c.getNick() + " :You have not registered\r\n");
+        sendToClient(fd, ":ircserv 451 " + c.replyNick() + " :You have not registered\r\n");
         return;
     }
 
     // trailing counts as a parameter when present
     size_t provided = msg.params.size() + (msg.hasTrailing ? 1 : 0);
     if (provided < def.minParams) {
-        sendToClient(fd, ":ircserv 461 " + c.getNick() + " " + msg.cmd + " :Not enough parameters\r\n");
+        sendToClient(fd, ":ircserv 461 " + c.replyNick() + " " + msg.cmd + " :Not enough parameters\r\n");
         return;
     }
 
@@ -141,9 +141,8 @@ void Server::tryRegister(int fd)
 
     if (!c->gotPass() || c->getPass() != _password)
     {
-        sendToClient(fd, ":ircserv 464 " + c->getNick() + " :Password incorrect\r\n");
-        flushToClient(fd);
-        disconnectClient(fd);
+        sendToClient(fd, ":ircserv 464 " + c->replyNick() + " :Password incorrect\r\n");
+        closeAfterFlush(fd, "Password incorrect");
         return;
     }
 

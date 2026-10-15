@@ -7,6 +7,6 @@ void cmdQuit(Server& server, int fd, const Message& msg)
     if (reason.empty())
         reason = "Client Quit";
 
-    // disconnectClient broadcasts the QUIT to every channel this client is in
-    server.disconnectClient(fd, "Quit: " + reason);
+    // broadcasts the QUIT now, closes the socket once ERROR is flushed
+    server.closeAfterFlush(fd, "Quit: " + reason);
 }

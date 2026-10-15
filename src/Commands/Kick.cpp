@@ -32,8 +32,5 @@ void cmdKick(Server& server, int fd, const Message& msg)
     if (!msg.trailing.empty()) ss << " :" << msg.trailing;
     ss << "\r\n";
     server.sendToChannel(channel, ss.str());
-    // flush kicked user's buffer so client processes KICK promptly
-    int tgtFd = server.findFdByNick(target);
-    if (tgtFd >= 0) server.flushToClient(tgtFd);
     server.removeMemberFromChannel(channel, target);
 }

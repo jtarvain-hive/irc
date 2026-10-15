@@ -8,7 +8,7 @@ void cmdUser(Server& server, int fd, const Message& msg)
     if (!c) return;
 
     if (c->isRegistered())
-        return server.sendToClient(fd, ":ircserv 462 * :You may not reregister\r\n");
+        return server.sendToClient(fd, ":ircserv 462 " + c->replyNick() + " :You may not reregister\r\n");
 
     // <username> <hostname> <servername> <realname>
     // We care about the username and realname.

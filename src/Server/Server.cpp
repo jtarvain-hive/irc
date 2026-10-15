@@ -95,7 +95,9 @@ void Server::acceptNewClient()
     _pollFds.push_back(pfd);
 }
 
-void Server::disconnectClient(int fd, const std::string& reason)
+// Everything about leaving except closing the socket: QUIT to channel peers,
+// leave channels, free the nick.
+void Server::detachClient(int fd, const std::string& reason)
 {
     Client* c = getClient(fd);
     if (c) {
@@ -104,16 +106,32 @@ void Server::disconnectClient(int fd, const std::string& reason)
         std::string who = c->getNick().empty() ? std::string("*") : c->getNick();
         broadcastToMemberChannels(fd, ":" + who + "!~" + c->getUser() + "@"
                                       + c->getIpAddr() + " QUIT :" + reason + "\r\n");
-        if (!c->getNick().empty())
+        if (findFdByNick(c->getNick()) == fd)
             _nickToFd.erase(c->getNick());
     }
 
     removeClientFromChannels(fd);
+}
 
-    close(fd);
+void Server::disconnectClient(int fd, const std::string& reason)
+{
+    detachClient(fd, reason);
     _clients.erase(fd);
     for (size_t i = 0; i < _pollFds.size(); ++i)
         if (_pollFds[i].fd == fd) { _pollFds[i].fd = -1; break; }
+}
+
+// The socket is closed by flushToClient once ERROR has been sent.
+void Server::closeAfterFlush(int fd, const std::string& reason)
+{
+    Client* c = getClient(fd);
+    if (!c || c->isClosing()) return;
+
+    detachClient(fd, reason);
+    sendToClient(fd, "ERROR :Closing link (" + reason + ")\r\n");
+    c->setClosing();
+    for (size_t i = 0; i < _pollFds.size(); ++i)
+        if (_pollFds[i].fd == fd) { _pollFds[i].events = POLLOUT; break; }
 }
 
 void Server::readFromClient(int fd)
@@ -121,13 +139,8 @@ void Server::readFromClient(int fd)
     char    tmp[512];
     ssize_t n = recv(fd, tmp, sizeof(tmp), 0);
 
-    if (n == 0)
+    if (n <= 0)
         return disconnectClient(fd);
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-        return disconnectClient(fd);
-    }
 
     Client* c = getClient(fd);
     if (!c) return;
@@ -145,7 +158,7 @@ void Server::readFromClient(int fd)
             // std::cerr << "<< " << line << "\n";   // DEBUG: raw client input
             handleCommand(fd, line);
             c = getClient(fd);   // handleCommand may have disconnected this client
-            if (!c) return;      // client is gone; don't touch freed memory
+            if (!c || c->isClosing()) return;
         }
     }
 }
@@ -167,8 +180,11 @@ void Server::flushToClient(int fd)
     if (c.outBuf().empty()) return;
 
     ssize_t n = send(fd, c.outBuf().data(), c.outBuf().size(), 0);
-    if (n <= 0) return;
+    if (n < 0)
+        return disconnectClient(fd);
     c.outBuf().erase(0, n);
+    if (c.outBuf().empty() && c.isClosing())
+        return disconnectClient(fd);
     if (c.outBuf().empty())
         for (size_t i = 0; i < _pollFds.size(); ++i)
             if (_pollFds[i].fd == fd) { _pollFds[i].events &= ~POLLOUT; break; }
@@ -190,6 +206,10 @@ void Server::run() {
                     acceptNewClient();
                 else
                     readFromClient(_pollFds[i].fd);
+            }
+            else if (_pollFds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+                if (_pollFds[i].fd != _listenFd)
+                    disconnectClient(_pollFds[i].fd);
             }
             if (_pollFds[i].revents & POLLOUT)
                 flushToClient(_pollFds[i].fd);

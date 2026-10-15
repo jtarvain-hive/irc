@@ -219,6 +219,7 @@ void Server::removeClientFromChannels(int fd)
 {
     for (auto it = _channels.begin(); it != _channels.end(); ) {
         Channel& ch = it->second;
+        ch.removeInvite(fd);   // invites are keyed by fd, which the OS will reuse
         if (ch.hasMember(fd))
             ch.removeMember(fd);
         if (ch.empty())

@@ -2,6 +2,7 @@
 #include "Server.hpp"
 #include "Client.hpp"
 
+#include <set>
 #include <sstream>
 
 void cmdNotice(Server& server, int fd, const Message& msg)
@@ -10,20 +11,24 @@ void cmdNotice(Server& server, int fd, const Message& msg)
     if (!sender || msg.params.empty() || msg.trailing.empty())
         return;
 
-    const std::string& target = msg.params[0];
+    std::set<std::string, IrcLess> seen;
+    for (const std::string& target : splitList(msg.params[0], ',')) {
+        if (target.empty() || !seen.insert(target).second)
+            continue;
 
-    std::stringstream ss;
-    ss << ":" << sender->getNick() << "!~" << sender->getUser()
-       << "@" << sender->getIpAddr()
-       << " NOTICE " << target << " :" << msg.trailing << "\r\n";
-    const std::string line = ss.str();
+        std::stringstream ss;
+        ss << ":" << sender->getNick() << "!~" << sender->getUser()
+           << "@" << sender->getIpAddr()
+           << " NOTICE " << target << " :" << msg.trailing << "\r\n";
+        const std::string line = ss.str();
 
-    if (target[0] == '#' || target[0] == '&') {
-        server.sendToChannel(target, line, fd);
-        return;
+        if (target[0] == '#' || target[0] == '&') {
+            server.sendToChannel(target, line, fd);
+            continue;
+        }
+
+        int targetFd = server.findFdByNick(target);
+        if (targetFd >= 0)
+            server.sendToClient(targetFd, line);
     }
-
-    int targetFd = server.findFdByNick(target);
-    if (targetFd >= 0)
-        server.sendToClient(targetFd, line);
 }

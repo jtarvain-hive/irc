@@ -12,6 +12,7 @@ public:
 	int					getFd() const;
 	const std::string&	getIpAddr() const;
 	const std::string&	getNick() const;
+	std::string			replyNick() const;	// nick, or "*" before one is set
 	const std::string&	getPass() const;
 	const std::string&	getUser() const;
 
@@ -19,6 +20,7 @@ public:
 	bool				gotPass() const;
 	bool				gotNick() const;
 	bool				gotUser() const;
+	bool				isClosing() const;
 
 
 	void				setFd(int fd);
@@ -27,6 +29,7 @@ public:
 	void				setPass(const std::string& pass);
 	void				setUser(const std::string& user, const std::string& realname);
 	void				setRegistered(bool value);
+	void				setClosing();
 
 	std::string&		recvBuf();
 	std::string&		outBuf();
@@ -40,6 +43,7 @@ private:
 	bool		_gotUser;
 
 	bool		_registered;
+	bool		_closing;	// farewell queued; close once _outBuf is flushed
 
 	std::string	_nick;
 	std::string	_pass;

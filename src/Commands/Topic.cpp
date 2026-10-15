@@ -12,16 +12,19 @@ void cmdTopic(Server& server, int fd, const Message& msg)
 
     const std::string& channel = msg.params[0];
 
-    // No trailing -> query the topic
     Channel* ch = server.getChannel(channel);
+    if (!ch)
+        return server.sendToClient(fd, ":ircserv 403 " + c->getNick() + " " + channel + " :No such channel\r\n");
+
+    // No trailing -> query the topic
     if (!msg.hasTrailing) {
-        if (!ch || ch->getTopic().empty())
+        if (ch->getTopic().empty())
             return server.sendToClient(fd, ":ircserv 331 " + c->getNick() + " " + channel + " :No topic is set\r\n");
         return server.sendToClient(fd, ":ircserv 332 " + c->getNick() + " " + channel + " :" + ch->getTopic() + "\r\n");
     }
 
     // Setting the topic
-    if (!ch || !ch->hasMember(fd))
+    if (!ch->hasMember(fd))
         return server.sendToClient(fd, ":ircserv 442 " + c->getNick() + " " + channel + " :You're not on that channel\r\n");
 
     if (ch->isTopicRestricted() && !ch->isOperator(fd))

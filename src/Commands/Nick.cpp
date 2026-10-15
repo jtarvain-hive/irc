@@ -34,37 +34,32 @@ bool isValidNick(const std::string& n)
 
 void cmdNick(Server& server, int fd, const Message& msg)
 {
+    Client* c = server.getClient(fd);
+    if (!c) return;
+
     if (msg.params.empty()) {
-        server.sendToClient(fd, ":ircserv 431 * :No nickname given\r\n");
+        server.sendToClient(fd, ":ircserv 431 " + c->replyNick() + " :No nickname given\r\n");
         return;
     }
     const std::string& nick = msg.params[0];
 
     if (!isValidNick(nick)) {
-        server.sendToClient(fd, ":ircserv 432 * " + nick + " :Erroneous nickname\r\n");
+        server.sendToClient(fd, ":ircserv 432 " + c->replyNick() + " " + nick + " :Erroneous nickname\r\n");
         return;
     }
 
     if (server.isNickInUse(nick)) {
-        server.sendToClient(fd, ":ircserv 433 * " + nick + " :Nickname is already in use\r\n");
+        server.sendToClient(fd, ":ircserv 433 " + c->replyNick() + " " + nick + " :Nickname is already in use\r\n");
         return;
     }
 
-    Client* c = server.getClient(fd);
-    if (!c) return;
-
     std::string oldNick = c->getNick();
-    if (c->isRegistered() && !oldNick.empty()) {
-        // Already registered -> update the nick mapping
+    if (!oldNick.empty())
         server.unregisterNick(oldNick);
-        c->setNick(nick);
-        server.registerNick(nick, fd);
-    } else {
-        c->setNick(nick);
-        server.registerNick(nick, fd);
-    }
+    c->setNick(nick);
+    server.registerNick(nick, fd);
 
-    if (oldNick.empty()) {
+    if (!c->isRegistered()) {
         server.tryRegister(fd);
         return;
     }
@@ -75,5 +70,4 @@ void cmdNick(Server& server, int fd, const Message& msg)
        << " NICK " << nick << "\r\n";
     server.sendToClient(fd, ss.str());
     server.broadcastToMemberChannels(fd, ss.str());
-    server.tryRegister(fd);
 }

@@ -4,18 +4,6 @@
 
 namespace {
 
-std::vector<std::string> splitList(const std::string& s, char sep)
-{
-    std::vector<std::string> out;
-    std::string cur;
-    for (char ch : s) {
-        if (ch == sep) { out.push_back(cur); cur.clear(); }
-        else cur += ch;
-    }
-    out.push_back(cur);
-    return out;
-}
-
 void partOne(Server& server, int fd, const std::string& name, const std::string& reason)
 {
     Client* c = server.getClient(fd);
@@ -32,8 +20,6 @@ void partOne(Server& server, int fd, const std::string& name, const std::string&
     if (!reason.empty()) ss << " :" << reason;
     ss << "\r\n";
     server.sendToChannel(name, ss.str());
-    // ensure client receives the PART immediately
-    server.flushToClient(fd);
     server.removeMemberFromChannel(name, c->getNick());
 }
 

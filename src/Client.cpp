@@ -2,7 +2,8 @@
 #include <unistd.h>   // close()
 
 Client::Client(int fd, const std::string& ipAddr) : _fd(fd), _ipAddr(ipAddr),
-								 _gotPass(false), _gotNick(false), _gotUser(false), _registered(false) {}
+								 _gotPass(false), _gotNick(false), _gotUser(false), _registered(false),
+								 _closing(false) {}
 
 Client::~Client()
 {
@@ -23,6 +24,11 @@ const std::string& Client::getIpAddr() const
 const std::string& Client::getNick() const
 {
 	return (_nick);
+}
+
+std::string Client::replyNick() const
+{
+	return (_nick.empty() ? "*" : _nick);
 }
 
 const std::string& Client::getPass() const
@@ -56,6 +62,11 @@ bool	Client::gotUser() const
 	return (_gotUser);
 }
 
+bool	Client::isClosing() const
+{
+	return (_closing);
+}
+
 void	Client::setFd(int fd)
 {
 	_fd = fd;
@@ -87,6 +98,10 @@ void	Client::setUser(const std::string& user, const std::string& realname)
 
 void	Client::setRegistered(bool value) {
 	this->_registered = value;
+}
+
+void	Client::setClosing() {
+	this->_closing = true;
 }
 
 std::string&	Client::recvBuf() {

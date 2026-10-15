@@ -8,10 +8,10 @@ void cmdPass(Server& server, int fd, const Message& msg)
     if (!c) return;
 
     if (c->isRegistered())
-        return server.sendToClient(fd, ":ircserv 462 * :You may not reregister\r\n");
+        return server.sendToClient(fd, ":ircserv 462 " + c->replyNick() + " :You may not reregister\r\n");
 
     if (msg.params.empty())
-        return server.sendToClient(fd, ":ircserv 461 * PASS :Not enough parameters\r\n");
+        return server.sendToClient(fd, ":ircserv 461 " + c->replyNick() + " PASS :Not enough parameters\r\n");
 
     c->setPass(msg.params[0]);
     // server.sendToClient(fd, ":ircserv NOTICE * :PASS command received\r\n");

@@ -20,7 +20,7 @@ VPATH			:= src src/Server src/Commands
 all: $(NAME)
 
 val: $(NAME)
-	valgrind ./$(NAME) 6667 pw
+	valgrind --leak-check=full --track-origins=yes --track-fds=yes ./$(NAME) 6667 pw
 
 $(NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(HFLAGS) $(OBJ) -o $(NAME)
