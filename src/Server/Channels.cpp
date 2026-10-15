@@ -176,11 +176,14 @@ void Server::addInvite(const std::string& channel, const std::string& nick)
 
 void Server::replyChannelMode(int fd, const std::string& channel)
 {
+    Client* c = getClient(fd);
+    if (!c) return;
+
     Channel* ch = getChannel(channel);
     std::string modes = "+";
     std::string args;
     if (!ch) {
-        sendToClient(fd, ":ircserv 324 * " + channel + " :+\r\n");
+        sendToClient(fd, ":ircserv 403 " + c->getNick() + " " + channel + " :No such channel\r\n");
         return;
     }
     if (ch->isInviteOnly()) modes += 'i';
@@ -191,7 +194,7 @@ void Server::replyChannelMode(int fd, const std::string& channel)
         std::stringstream ss; ss << ch->getUserLimit();
         args += " " + ss.str();
     }
-    sendToClient(fd, ":ircserv 324 * " + channel + " " + modes + args + "\r\n");
+    sendToClient(fd, ":ircserv 324 " + c->getNick() + " " + channel + " " + modes + args + "\r\n");
 }
 
 void Server::broadcastToMemberChannels(int fd, const std::string& line)

@@ -25,7 +25,7 @@ void Server::buildDispatch()
     dispatchCommand = {
         {"PASS",   { cmdPass,   false, 1 }},
         {"NICK",   { cmdNick,   false, 1 }},
-        {"USER",   { cmdUser,   false, 3 }},
+        {"USER",   { cmdUser,   false, 4 }},
         {"PRIVMSG",{ cmdPrivmsg,true,  2 }},
         {"NOTICE", { cmdNotice, true,  0 }},
         {"WHO",    { cmdWho,    true,  0 }},

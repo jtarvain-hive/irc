@@ -10,7 +10,11 @@ void cmdPrivmsg(Server& server, int fd, const Message& msg)
     if (!sender) return;
 
     const std::string& target = msg.params[0];
-    const std::string  text   = msg.trailing;
+    std::string text;
+    if (msg.hasTrailing)
+        text = msg.trailing;
+    else if (msg.params.size() >= 2)
+        text = msg.params[1];
 
     if (text.empty())
         return server.sendToClient(fd, ":ircserv 412 " + sender->getNick() + " :No text to send\r\n");

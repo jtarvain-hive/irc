@@ -27,6 +27,10 @@ void joinOne(Server& server, int fd, const std::string& name, const std::string&
         return server.sendToClient(fd, ":ircserv 403 " + c->getNick() + " " + name + " :No such channel\r\n");
 
     Channel* ch = server.getChannel(name);
+    // Rejoining an existing membership must not recheck access or emit JOIN.
+    if (ch && ch->hasMember(fd))
+        return;
+
     if (ch && ch->isInviteOnly() && !ch->isInvited(fd))
         return server.sendToClient(fd, ":ircserv 473 " + c->getNick() + " " + name + " :Cannot join channel (invite only)\r\n");
 
