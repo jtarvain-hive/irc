@@ -28,8 +28,7 @@ void joinOne(Server& server, int fd, const std::string& name, const std::string&
     if (ch && ch->hasUserLimit() && ch->getMembers().size() >= ch->getUserLimit())
         return server.sendToClient(fd, ":ircserv 471 " + c->getNick() + " " + name + " :Channel is full\r\n");
 
-    if (!server.addMemberToChannel(name, fd, key))
-        return server.sendToClient(fd, ":ircserv 403 " + c->getNick() + " " + name + " :No such channel\r\n");
+    server.addMemberToChannel(name, fd);
 
     ch = server.getChannel(name);
     if (!ch)

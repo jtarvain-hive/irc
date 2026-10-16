@@ -8,20 +8,15 @@
 #include <unordered_map>
 #include <string_view>
 #include <poll.h>
-#include <exception>
 
-#include <stdio.h>
-#include <string.h>
 #include <sstream>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
 #include <csignal>
 
-#include <functional>
 
 #include "Client.hpp"
 #include "Channel.hpp"
@@ -95,12 +90,10 @@ public:
     // Channel management helpers used by command handlers
     Channel* getOrCreateChannel(const std::string& name);
     Channel* getChannel(const std::string& name);
-    bool     channelExists(const std::string& name) const;
 
     bool     isMember(const std::string& channel, const std::string& nick) const;
-    bool     isOperator(const std::string& channel, const std::string& nick) const;
 
-    bool     addMemberToChannel(const std::string& channel, int fd, const std::string& key = "");
+    void     addMemberToChannel(const std::string& channel, int fd);
     bool     removeMemberFromChannel(const std::string& channel, const std::string& nick);
 
     void     setChannelInviteOnly(const std::string& channel, bool value);

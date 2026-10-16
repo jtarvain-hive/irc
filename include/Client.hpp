@@ -9,7 +9,6 @@ public:
 	Client& operator=(const Client& other) = delete;
 	~Client();
 
-	int					getFd() const;
 	const std::string&	getIpAddr() const;
 	const std::string&	getNick() const;
 	std::string			replyNick() const;	// nick, or "*" before one is set
@@ -23,11 +22,9 @@ public:
 	bool				isClosing() const;
 
 
-	void				setFd(int fd);
-	void				setIpAddr(const std::string& ipAddr);
 	void				setNick(const std::string& nick);
 	void				setPass(const std::string& pass);
-	void				setUser(const std::string& user, const std::string& realname);
+	void				setUser(const std::string& user);
 	void				setRegistered(bool value);
 	void				setClosing();
 

@@ -12,7 +12,6 @@ void cmdKick(Server& server, int fd, const Message& msg)
 
     const std::string& channel = msg.params[0];
     const std::string& target  = msg.params[1];
-    const std::string  reason  = msg.trailing.empty() ? target : msg.trailing;
 
     Channel* ch = server.getChannel(channel);
     if (!ch || !ch->hasMember(fd))

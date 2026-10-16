@@ -6,7 +6,7 @@
 
 namespace {
 
-// returns true on '+k' / '+l' to signal that an extra parameter is required
+// returns true if the mode changed (reply goes to the channel), false on error
 bool applyMode(Server& server, int fd,
                const std::string& channel, char mode, char sign,
                const std::string& arg, std::string& outReply)

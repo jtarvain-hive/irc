@@ -131,13 +131,7 @@ void Server::tryRegister(int fd)
         return;
 
     if (!c->gotNick() || !c->gotUser())
-    {
-        // Silent on intermediate steps; uncomment for debugging.
-        // std::stringstream ss;
-        // ss << ":ircserv NOTICE * :Registration status: PASS(" << ...
-        // sendToClient(fd, ss.str());
         return;
-    }
 
     if (!c->gotPass() || c->getPass() != _password)
     {

@@ -155,7 +155,6 @@ void Server::readFromClient(int fd)
             line.pop_back();
         if (!line.empty())
         {
-            // std::cerr << "<< " << line << "\n";   // DEBUG: raw client input
             handleCommand(fd, line);
             c = getClient(fd);   // handleCommand may have disconnected this client
             if (!c || c->isClosing()) return;

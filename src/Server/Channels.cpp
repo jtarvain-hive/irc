@@ -64,11 +64,6 @@ Channel* Server::getChannel(const std::string& name)
     return &it->second;
 }
 
-bool Server::channelExists(const std::string& name) const
-{
-    return _channels.find(name) != _channels.end();
-}
-
 bool Server::isMember(const std::string& channel, const std::string& nick) const
 {
     int fd = findFdByNick(nick);
@@ -78,29 +73,12 @@ bool Server::isMember(const std::string& channel, const std::string& nick) const
     return it->second.hasMember(fd);
 }
 
-bool Server::isOperator(const std::string& channel, const std::string& nick) const
-{
-    int fd = findFdByNick(nick);
-    if (fd < 0) return false;
-    auto it = _channels.find(channel);
-    if (it == _channels.end()) return false;
-    return it->second.isOperator(fd);
-}
-
-bool Server::addMemberToChannel(const std::string& channel, int fd, const std::string& key)
+// Access checks (+i/+k/+l) are done by the caller (joinOne); this only adds.
+void Server::addMemberToChannel(const std::string& channel, int fd)
 {
     Channel* ch = getOrCreateChannel(channel);
-    if (!ch) return false;
-    // Key check
-    if (ch->hasKey() && ch->getKey() != key)
-        return false;
-    // User limit
-    if (ch->hasUserLimit() && ch->getMembers().size() >= ch->getUserLimit())
-        return false;
     ch->addMember(fd);
-    // If invited, consume invite
-    if (ch->isInvited(fd)) ch->removeInvite(fd);
-    return true;
+    ch->removeInvite(fd);   // an invite is single-use
 }
 
 bool Server::removeMemberFromChannel(const std::string& channel, const std::string& nick)
@@ -118,14 +96,12 @@ bool Server::removeMemberFromChannel(const std::string& channel, const std::stri
 
 void Server::setChannelInviteOnly(const std::string& channel, bool value)
 {
-    Channel* ch = getOrCreateChannel(channel);
-    if (ch) ch->setInviteOnly(value);
+    getOrCreateChannel(channel)->setInviteOnly(value);
 }
 
 void Server::setChannelTopicRestricted(const std::string& channel, bool value)
 {
-    Channel* ch = getOrCreateChannel(channel);
-    if (ch) ch->setTopicRestricted(value);
+    getOrCreateChannel(channel)->setTopicRestricted(value);
 }
 
 void Server::setChannelOperator(const std::string& channel, const std::string& nick, bool value)
@@ -133,15 +109,12 @@ void Server::setChannelOperator(const std::string& channel, const std::string& n
     int fd = findFdByNick(nick);
     if (fd < 0) return;
     Channel* ch = getOrCreateChannel(channel);
-    if (!ch) return;
     if (value) ch->addOperator(fd); else ch->removeOperator(fd);
 }
 
 void Server::setChannelKey(const std::string& channel, const std::string& key)
 {
-    Channel* ch = getOrCreateChannel(channel);
-    if (!ch) return;
-    ch->setKey(key);
+    getOrCreateChannel(channel)->setKey(key);
 }
 
 void Server::clearChannelKey(const std::string& channel)
@@ -153,9 +126,7 @@ void Server::clearChannelKey(const std::string& channel)
 
 void Server::setChannelUserLimit(const std::string& channel, size_t limit)
 {
-    Channel* ch = getOrCreateChannel(channel);
-    if (!ch) return;
-    ch->setUserLimit(limit);
+    getOrCreateChannel(channel)->setUserLimit(limit);
 }
 
 void Server::clearChannelUserLimit(const std::string& channel)
@@ -169,9 +140,7 @@ void Server::addInvite(const std::string& channel, const std::string& nick)
 {
     int fd = findFdByNick(nick);
     if (fd < 0) return;
-    Channel* ch = getOrCreateChannel(channel);
-    if (!ch) return;
-    ch->addInvite(fd);
+    getOrCreateChannel(channel)->addInvite(fd);
 }
 
 void Server::replyChannelMode(int fd, const std::string& channel)

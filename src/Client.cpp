@@ -11,11 +11,6 @@ Client::~Client()
 		close(_fd);
 }
 
-int Client::getFd() const
-{
-	return (_fd);
-}
-
 const std::string& Client::getIpAddr() const
 {
 	return (_ipAddr);
@@ -67,16 +62,6 @@ bool	Client::isClosing() const
 	return (_closing);
 }
 
-void	Client::setFd(int fd)
-{
-	_fd = fd;
-}
-
-void	Client::setIpAddr(const std::string& ipAddr)
-{
-	_ipAddr = ipAddr;
-}
-
 void	Client::setNick(const std::string& nick)
 {
 	this->_nick = nick;
@@ -89,9 +74,8 @@ void	Client::setPass(const std::string& pass)
 	this->_gotPass = true;
 }
 
-void	Client::setUser(const std::string& user, const std::string& realname)
+void	Client::setUser(const std::string& user)
 {
-	(void)realname; // For now, we don't use the realname, but it's good to have.
 	this->_username = user;
 	this->_gotUser = true;
 }

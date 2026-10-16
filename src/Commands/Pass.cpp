@@ -14,6 +14,5 @@ void cmdPass(Server& server, int fd, const Message& msg)
         return server.sendToClient(fd, ":ircserv 461 " + c->replyNick() + " PASS :Not enough parameters\r\n");
 
     c->setPass(msg.params[0]);
-    // server.sendToClient(fd, ":ircserv NOTICE * :PASS command received\r\n");
     server.tryRegister(fd);
 }
