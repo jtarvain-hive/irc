@@ -25,7 +25,6 @@ val: $(NAME)
 $(NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(HFLAGS) $(OBJ) -o $(NAME)
 
-.NOTPARALLEL: obj
 obj:
 	mkdir -p obj
 
@@ -38,8 +37,9 @@ clean:
 fclean: clean
 	rm -f $(NAME)
 
-.NOTPARALLEL: re
-re: fclean all
+re:
+	$(MAKE) fclean
+	$(MAKE) all
 
 .PHONY: all clean fclean re
 .SECONDARY: $(OBJ) obj
